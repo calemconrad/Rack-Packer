@@ -1,7 +1,11 @@
 "use client"
 
-import DndProvider from "../components/DndProvider"
+import RackPlanner from "@/components/RackPlanner"
 
-export default function SyntheticV0PageForDeployment() {
-  return <DndProvider />
+export default function Home() {
+  return (
+    <main className="min-h-screen bg-gray-900">
+      <RackPlanner />
+    </main>
+  )
 }

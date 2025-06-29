@@ -1,153 +1,102 @@
 "use client"
 
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+
+interface GearWithPosition {
+  id: string
+  name: string
+  units: number
+  color: string
+  type: string
+  rackPosition: number
+  widthFraction?: number
+  slotPosition?: number
+}
 
 interface GearPositionModalProps {
-  isOpen: boolean
-  onClose: () => void
-  gear: any
+  gear: GearWithPosition
   rackUnits: number
-  currentPosition: number
   onMove: (newPosition: number) => void
-  occupiedPositions: number[]
+  onClose: () => void
+  isPositionFree: (start: number, units: number, excludeId?: string) => boolean
 }
 
 export default function GearPositionModal({
-  isOpen,
-  onClose,
   gear,
   rackUnits,
-  currentPosition,
   onMove,
-  occupiedPositions,
+  onClose,
+  isPositionFree,
 }: GearPositionModalProps) {
-  const [selectedPosition, setSelectedPosition] = useState(currentPosition)
-
-  if (!isOpen || !gear) return null
-
-  // Check if a position is available for the gear
-  const isPositionAvailable = (position: number) => {
-    if (position < 1 || position + gear.units - 1 > rackUnits) return false
-
-    // Check if any of the required positions are occupied (excluding current gear)
-    for (let i = 0; i < gear.units; i++) {
-      const checkPosition = position + i
-      if (
-        occupiedPositions.includes(checkPosition) &&
-        !(checkPosition >= currentPosition && checkPosition < currentPosition + gear.units)
-      ) {
-        return false
-      }
-    }
-    return true
-  }
-
-  // Get the positions this gear will occupy
-  const getOccupiedRange = (position: number) => {
-    const range = []
-    for (let i = 0; i < gear.units; i++) {
-      range.push(position + i)
-    }
-    return range
-  }
+  const [selectedPosition, setSelectedPosition] = useState(gear.rackPosition)
 
   const handleMove = () => {
-    if (isPositionAvailable(selectedPosition)) {
+    if (isPositionFree(selectedPosition, gear.units, gear.id)) {
       onMove(selectedPosition)
     }
   }
 
+  const positions = Array.from({ length: rackUnits - gear.units + 1 }, (_, i) => i + 1)
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-white">Move {gear.name}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl">
-            ×
-          </button>
-        </div>
+      <Card className="bg-gray-800 border-gray-700 w-96">
+        <CardHeader>
+          <CardTitle className="text-white">Move {gear.name}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="text-gray-300 text-sm">Select new position for this {gear.units}U item:</div>
 
-        <div className="mb-4">
-          <p className="text-gray-300 text-sm mb-2">Select a new position for this {gear.units}U gear item:</p>
-          <p className="text-gray-400 text-xs">Rack units are numbered from bottom (1U) to top ({rackUnits}U)</p>
-        </div>
+          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
+            {positions.map((position) => {
+              const isFree = isPositionFree(position, gear.units, gear.id)
+              const isCurrent = position === gear.rackPosition
 
-        {/* Position Grid */}
-        <div className="grid grid-cols-4 gap-2 mb-4">
-          {Array.from({ length: rackUnits }, (_, i) => {
-            const position = rackUnits - i // Reverse order (top to bottom display)
-            const isCurrentPosition = position >= currentPosition && position < currentPosition + gear.units
-            const isAvailable = isPositionAvailable(position)
-            const isSelected = position === selectedPosition
-            const willOccupy = getOccupiedRange(selectedPosition).includes(position)
-
-            return (
-              <button
-                key={position}
-                onClick={() => isAvailable && setSelectedPosition(position)}
-                disabled={!isAvailable}
-                className={`
-                  h-10 rounded text-sm font-medium transition-colors
-                  ${
-                    isCurrentPosition
-                      ? "bg-blue-600 text-white"
-                      : isSelected && willOccupy
-                        ? "bg-green-600 text-white"
-                        : isAvailable
-                          ? "bg-green-500 hover:bg-green-600 text-white"
-                          : "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  }
-                `}
-                title={
-                  isCurrentPosition ? "Current position" : isAvailable ? `Move to ${position}U` : "Position blocked"
-                }
-              >
-                {position}U
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Preview */}
-        {selectedPosition !== currentPosition && (
-          <div className="mb-4 p-3 bg-gray-700 rounded">
-            <p className="text-sm text-gray-300">
-              <strong>Preview:</strong> {gear.name} will occupy positions{" "}
-              {getOccupiedRange(selectedPosition).join("U, ")}U
-            </p>
+              return (
+                <button
+                  key={position}
+                  onClick={() => setSelectedPosition(position)}
+                  disabled={!isFree && !isCurrent}
+                  className={`
+                    p-2 rounded text-sm font-medium transition-colors
+                    ${
+                      selectedPosition === position
+                        ? "bg-blue-600 text-white"
+                        : isFree || isCurrent
+                          ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                          : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                    }
+                  `}
+                >
+                  {position}U{isCurrent && <div className="text-xs">Current</div>}
+                  {!isFree && !isCurrent && <div className="text-xs">Blocked</div>}
+                </button>
+              )
+            })}
           </div>
-        )}
 
-        {/* Action Buttons */}
-        <div className="flex gap-3">
-          <button
-            onClick={handleMove}
-            disabled={!isPositionAvailable(selectedPosition) || selectedPosition === currentPosition}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white py-2 px-4 rounded font-medium transition-colors"
-          >
-            Move to {selectedPosition}U
-          </button>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded font-medium transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-
-        {/* Help Text */}
-        <div className="mt-4 text-xs text-gray-400">
-          <p>
-            <span className="inline-block w-3 h-3 bg-blue-600 rounded mr-2"></span>Current position
-          </p>
-          <p>
-            <span className="inline-block w-3 h-3 bg-green-500 rounded mr-2"></span>Available positions
-          </p>
-          <p>
-            <span className="inline-block w-3 h-3 bg-gray-600 rounded mr-2"></span>Blocked positions
-          </p>
-        </div>
-      </div>
+          <div className="flex justify-between">
+            <Button
+              onClick={onClose}
+              variant="outline"
+              className="bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMove}
+              disabled={
+                !isPositionFree(selectedPosition, gear.units, gear.id) && selectedPosition !== gear.rackPosition
+              }
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Move to {selectedPosition}U
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

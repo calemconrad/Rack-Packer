@@ -127,3 +127,5 @@ export const rackCapacities = {
     32: 400,
   },
 }
+
+export default gearWeights

@@ -407,21 +407,30 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
      =  RACK CRUD  =
      ============================================================== */
 
-  const handleAddRack = (label: string) => {
-    const fly = label.includes("Fly Rack")
-    const tour = label.includes("Tour Rack")
-    const size = Number(label.match(/(\d+)U/)?.[1] ?? 4)
-    const wide = label.includes("Double") ? "double" : "single"
+  interface NewRackInfo {
+    type: string // "Fly Rack" | "Tour Rack"
+    size: string // e.g. "4U"
+    width: string // e.g. "Single" | "Single Wide" | "Double Wide"
+    depth: string // e.g. '24"' | '30"' | "Standard"
+  }
+
+  const handleAddRack = (rackInfo: NewRackInfo) => {
+    const { type: kind, size, width: widthLabel } = rackInfo
+
+    // Parse helpers
+    const sizeNumber = Number.parseInt(size, 10) || 4 // fallback 4 U
+    const isFly = kind === "Fly Rack"
+    const isDouble = widthLabel.toLowerCase().includes("double")
 
     const id = `rack-${Date.now()}`
-    setRacks((p) => [
-      ...p,
+    setRacks((prev) => [
+      ...prev,
       {
         id,
-        name: label,
-        type: fly ? "fly" : "tour",
-        units: size,
-        width: wide,
+        name: `${size} ${kind}`, //  e.g. "10U Tour Rack"
+        type: isFly ? "fly" : "tour",
+        units: sizeNumber,
+        width: isDouble ? "double" : "single",
         gear: [],
         frontGear: [],
         backGear: [],

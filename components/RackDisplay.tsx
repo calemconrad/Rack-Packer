@@ -1,18 +1,51 @@
 "use client"
-import { forwardRef, useState } from "react"
+
+import React, { forwardRef } from "react"
 import GearPositionModal from "./GearPositionModal"
 
 const RACK_UNIT_HEIGHT = 44
+const RACK_WIDTH = 482
 
-// Calculate gear position based on rack unit (1 = bottom, higher = top)
-const calculateGearPosition = (rackPosition, units, totalRackUnits) => {
-  // Convert rack position to screen coordinates
-  // Rack unit 1 should be at the bottom, so we need to invert
-  const topPosition = (totalRackUnits - rackPosition - units + 1) * RACK_UNIT_HEIGHT
-  return topPosition
+interface GearWithPosition {
+  id: string
+  name: string
+  units: number
+  color: string
+  type: string
+  category?: string
+  slots?: number
+  modules?: any[]
+  image?: string
+  rackPosition: number
+  widthFraction?: number
+  slotPosition?: number
 }
 
-const RackDisplay = forwardRef(
+interface RackDisplayProps {
+  gear: GearWithPosition[]
+  label: string
+  rackUnits: number
+  onRemoveGear: (id: string) => void
+  onMouseDownItem: (e: React.MouseEvent, id: string) => void
+  onMoveGear: (gearId: string, newPosition: number) => void
+  hoveredItem: string | null
+  setHoveredItem: (id: string | null) => void
+  removeModuleFromChassis: (chassisId: string, slotIndex: number) => void
+  handleModuleMouseDown: (e: React.MouseEvent, chassisId: string, slotIndex: number) => void
+  handleModuleMouseUp: (e: React.MouseEvent, chassisId: string, slotIndex: number) => void
+  handleEditModule: (chassisId: string, slotIndex: number, name: string) => void
+  draggedModule: any
+  draggedModuleInfo: any
+  setEditingModule: (module: any) => void
+  editingModule: any
+  racks: any[]
+  currentRackId: string | null
+  draggedItem: any
+  draggedOverSlot: number | null
+  isPositionFree: (start: number, units: number, excludeId?: string) => boolean
+}
+
+const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
   (
     {
       gear,
@@ -20,6 +53,7 @@ const RackDisplay = forwardRef(
       rackUnits,
       onRemoveGear,
       onMouseDownItem,
+      onMoveGear,
       hoveredItem,
       setHoveredItem,
       removeModuleFromChassis,
@@ -35,329 +69,353 @@ const RackDisplay = forwardRef(
       draggedItem,
       draggedOverSlot,
       isPositionFree,
-      onMoveGear,
     },
     ref,
   ) => {
-    const [positionModal, setPositionModal] = useState({ isOpen: false, gear: null })
-    const [dropZones, setDropZones] = useState([])
-    const rackHeight = rackUnits * RACK_UNIT_HEIGHT
+    const [showPositionModal, setShowPositionModal] = React.useState(false)
+    const [selectedGear, setSelectedGear] = React.useState<GearWithPosition | null>(null)
 
-    // Get all occupied positions for the modal
-    const getOccupiedPositions = () => {
-      const occupied = []
-      gear.forEach((item) => {
-        for (let i = 0; i < item.units; i++) {
-          occupied.push(item.rackPosition + i)
-        }
-      })
-      return occupied
+    const calculateGearPosition = (rackUnit: number, rackSize: number) => {
+      return (rackSize - rackUnit) * RACK_UNIT_HEIGHT
     }
 
-    const handleMoveGearToPosition = (gearItem, newPosition) => {
-      if (onMoveGear) {
-        onMoveGear(gearItem.id, newPosition)
+    const getItemWidth = (item: GearWithPosition) => {
+      if (item.widthFraction) {
+        const fullWidth = 458
+        return fullWidth * item.widthFraction
       }
-      setPositionModal({ isOpen: false, gear: null })
+      return "100%"
     }
 
-    const openPositionModal = (gearItem) => {
-      setPositionModal({ isOpen: true, gear: gearItem })
-    }
-
-    // Handle drag over rack units
-    const handleDragOver = (e, rackUnit) => {
-      e.preventDefault()
-      if (draggedItem) {
-        // Check if this position is valid for the dragged item
-        const isValid = isPositionFree(rackUnit, draggedItem.gear.units, draggedItem.gear.id)
-        if (isValid) {
-          e.dataTransfer.dropEffect = "move"
-        } else {
-          e.dataTransfer.dropEffect = "none"
-        }
+    const getItemLeft = (item: GearWithPosition) => {
+      if (item.widthFraction && typeof item.slotPosition === "number") {
+        const fullWidth = 458
+        const slotWidth = fullWidth / Math.floor(1 / item.widthFraction)
+        return item.slotPosition * slotWidth
       }
+      return 0
     }
 
-    // Handle drop on rack units
-    const handleDrop = (e, rackUnit) => {
-      e.preventDefault()
-      if (draggedItem && onMoveGear) {
-        const isValid = isPositionFree(rackUnit, draggedItem.gear.units, draggedItem.gear.id)
-        if (isValid) {
-          onMoveGear(draggedItem.gear.id, rackUnit)
-        }
-      }
-    }
+    const renderGearItem = (item: GearWithPosition) => {
+      const position = calculateGearPosition(item.rackPosition, rackUnits)
 
-    return (
-      <div className="flex flex-col items-center">
-        {/* Label */}
-        <div className="mb-4">
-          <h3 className="text-xl font-bold text-white text-center">{label}</h3>
-          <div className="text-gray-400 text-sm text-center">{rackUnits}U Rack</div>
-        </div>
-
-        {/* Rack Container */}
-        <div className="relative">
-          {/* Rack Unit Labels (Left Side) */}
-          <div className="absolute -left-12 top-0 bottom-0 flex flex-col justify-between">
-            {Array.from({ length: rackUnits }).map((_, i) => (
-              <div
-                key={`left-${i}`}
-                className="text-sm font-mono text-gray-500 flex items-center justify-end"
-                style={{
-                  height: `${RACK_UNIT_HEIGHT}px`,
-                  lineHeight: `${RACK_UNIT_HEIGHT}px`,
-                }}
-              >
-                {rackUnits - i}U
-              </div>
-            ))}
-          </div>
-
-          {/* Rack Unit Labels (Right Side) */}
-          <div className="absolute -right-12 top-0 bottom-0 flex flex-col justify-between">
-            {Array.from({ length: rackUnits }).map((_, i) => (
-              <div
-                key={`right-${i}`}
-                className="text-sm font-mono text-gray-500 flex items-center justify-start"
-                style={{
-                  height: `${RACK_UNIT_HEIGHT}px`,
-                  lineHeight: `${RACK_UNIT_HEIGHT}px`,
-                }}
-              >
-                {rackUnits - i}U
-              </div>
-            ))}
-          </div>
-
-          {/* Main Rack */}
+      if (item.type === "chassis") {
+        return (
           <div
-            id="rack-display"
-            ref={ref}
-            className="relative bg-gray-900 border-4 border-gray-700 rounded-lg overflow-hidden"
+            key={item.id}
+            onMouseEnter={() => setHoveredItem(item.id)}
+            onMouseLeave={() => setHoveredItem(null)}
+            onMouseDown={(e) => onMouseDownItem(e, item.id)}
             style={{
-              width: "482px",
-              height: `${rackHeight}px`,
-              background: "#1a1a1a",
-              backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23374151'/%3E%3C/svg%3E")`,
+              position: "absolute",
+              top: `${position}px`,
+              left: 0,
+              right: 0,
+              height: `${item.units * RACK_UNIT_HEIGHT}px`,
+              cursor: "grab",
             }}
           >
-            {/* Horizontal rack unit lines with drop zones */}
-            {Array.from({ length: rackUnits }).map((_, i) => {
-              const rackUnit = rackUnits - i // Convert to rack unit number (top to bottom)
-              const isDropTarget = draggedOverSlot === rackUnit
-              const canDrop = draggedItem && isPositionFree(rackUnit, draggedItem.gear.units, draggedItem.gear.id)
-
-              return (
-                <div key={i}>
-                  {/* Rack unit separator line */}
-                  {i > 0 && (
-                    <div
-                      className="absolute left-0 right-0 border-t border-gray-700"
-                      style={{ top: `${i * RACK_UNIT_HEIGHT}px` }}
-                    />
-                  )}
-
-                  {/* Drop zone overlay */}
-                  <div
-                    className={`absolute left-0 right-0 transition-all duration-200 ${
-                      isDropTarget && canDrop
-                        ? "bg-blue-500 bg-opacity-30 border-2 border-blue-400 border-dashed"
-                        : isDropTarget
-                          ? "bg-red-500 bg-opacity-20 border-2 border-red-400 border-dashed"
-                          : "hover:bg-blue-500 hover:bg-opacity-10"
-                    }`}
-                    style={{
-                      top: `${i * RACK_UNIT_HEIGHT}px`,
-                      height: `${RACK_UNIT_HEIGHT}px`,
-                      zIndex: 1,
-                    }}
-                    onDragOver={(e) => handleDragOver(e, rackUnit)}
-                    onDrop={(e) => handleDrop(e, rackUnit)}
-                  >
-                    {/* Drop zone indicator */}
-                    {isDropTarget && (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div
-                          className={`text-sm font-medium px-2 py-1 rounded ${
-                            canDrop ? "bg-blue-600 text-white" : "bg-red-600 text-white"
-                          }`}
-                        >
-                          {canDrop ? `Drop at ${rackUnit}U` : "Cannot place here"}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Rack mounting holes */}
-            <div className="absolute left-2 top-0 bottom-0 flex flex-col justify-around" style={{ zIndex: 2 }}>
-              {Array.from({ length: rackUnits * 2 }).map((_, i) => (
-                <div key={`hole-left-${i}`} className="w-2 h-2 bg-gray-600 rounded-full" />
-              ))}
-            </div>
-            <div className="absolute right-2 top-0 bottom-0 flex flex-col justify-around" style={{ zIndex: 2 }}>
-              {Array.from({ length: rackUnits * 2 }).map((_, i) => (
-                <div key={`hole-right-${i}`} className="w-2 h-2 bg-gray-600 rounded-full" />
-              ))}
-            </div>
-
-            {/* Gear Items */}
-            {gear.map((item) => {
-              const topPosition = calculateGearPosition(item.rackPosition, item.units, rackUnits)
-              const itemHeight = item.units * RACK_UNIT_HEIGHT
-              const isHovered = hoveredItem === item.id
-              const isDragged = draggedItem?.gear?.id === item.id
-
-              return (
-                <div
-                  key={item.id}
-                  draggable
-                  onDragStart={(e) => {
-                    // Set drag data
-                    e.dataTransfer.setData("text/plain", item.id)
-                    e.dataTransfer.effectAllowed = "move"
-
-                    // Trigger the existing mouse down handler for compatibility
-                    onMouseDownItem(e, item.id)
-                  }}
-                  onMouseDown={(e) => onMouseDownItem(e, item.id)}
-                  onMouseEnter={() => setHoveredItem(item.id)}
-                  onMouseLeave={() => setHoveredItem(null)}
-                  className={`absolute flex items-center justify-between text-white font-semibold text-center p-2 cursor-move transition-all select-none ${
-                    isHovered ? "ring-2 ring-blue-400" : ""
-                  } ${isDragged ? "opacity-50 z-50" : "z-10"}`}
-                  style={{
-                    left: item.widthFraction ? `${(item.slotPosition || 0) * (100 * item.widthFraction)}%` : "8px",
-                    top: `${topPosition}px`,
-                    width: item.widthFraction ? `${100 * item.widthFraction}%` : "466px",
-                    height: `${itemHeight - 4}px`,
-                    backgroundColor: item.color,
-                    borderRadius: "6px",
-                    border: "2px solid rgba(0,0,0,0.3)",
-                    boxShadow: isDragged ? "0 8px 25px rgba(0,0,0,0.3)" : "0 2px 8px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  {/* Gear Content */}
-                  <div className="flex-1 flex items-center justify-center">
-                    {item.image ? (
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={item.image || "/placeholder.svg"}
-                          alt={item.name}
-                          className="w-8 h-8 object-contain"
-                          onError={(e) => {
-                            e.target.style.display = "none"
-                          }}
-                        />
-                        <span className="text-sm font-medium">{item.name}</span>
-                      </div>
-                    ) : (
-                      <span className="text-sm font-medium">{item.name}</span>
-                    )}
-                  </div>
-
-                  {/* Position Indicator */}
-                  <div className="absolute top-1 left-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
-                    {item.rackPosition}U
-                  </div>
-
-                  {/* Chassis Modules */}
-                  {item.type === "chassis" && item.modules && (
-                    <div className="flex gap-1 mr-2">
-                      {item.modules.map((module, slotIndex) => (
-                        <div
-                          key={slotIndex}
-                          className={`w-6 h-6 border border-gray-600 rounded text-xs flex items-center justify-center ${
-                            module ? "bg-green-600" : "bg-gray-700"
-                          }`}
-                          onMouseDown={(e) => {
-                            e.stopPropagation()
-                            if (module) {
-                              handleModuleMouseDown(e, item.id, slotIndex)
-                            }
-                          }}
-                          onMouseUp={(e) => {
-                            e.stopPropagation()
-                            handleModuleMouseUp(e, item.id, slotIndex)
-                          }}
-                          title={module ? module.name : "Empty slot"}
-                        >
-                          {module ? "M" : slotIndex + 1}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Control Buttons */}
-                  <div className="flex gap-1 ml-2">
-                    {/* Move Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openPositionModal(item)
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="w-6 h-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-                      title="Move to position"
-                    >
-                      ↕
-                    </button>
-
-                    {/* Remove Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onRemoveGear(item.id)
-                      }}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      className="w-6 h-6 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center text-xs font-bold transition-colors"
-                      title="Remove item"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-
-            {/* Drag Preview */}
-            {draggedOverSlot && (
+            <div
+              style={{
+                paddingLeft: "20px",
+                paddingRight: "20px",
+                width: "100%",
+                height: "100%",
+                border: "2px solid #444",
+                background: "#1a1a1a",
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: "8px",
+                boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+              }}
+            >
               <div
-                className="absolute bg-blue-500 opacity-50 rounded"
                 style={{
-                  left: "8px",
-                  top: `${calculateGearPosition(draggedOverSlot, draggedItem?.gear?.units || 1, rackUnits)}px`,
-                  width: "466px",
-                  height: `${(draggedItem?.gear?.units || 1) * RACK_UNIT_HEIGHT - 4}px`,
+                  color: "white",
+                  fontWeight: "bold",
+                  padding: "8px 0",
+                  textAlign: "center",
+                  fontSize: "0.9em",
                 }}
-              />
+              >
+                {item.name}
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "8px",
+                  gap: "2px",
+                  minHeight: "60px",
+                }}
+              >
+                {item.modules?.map((module, idx) => (
+                  <div
+                    key={idx}
+                    onMouseDown={(e) => handleModuleMouseDown(e, item.id, idx)}
+                    onMouseUp={(e) => handleModuleMouseUp(e, item.id, idx)}
+                    style={{
+                      flex: 1,
+                      background: module ? "#7c3aed" : "#2d2d2d",
+                      border: "1px solid #666",
+                      borderRadius: "3px",
+                      color: "white",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      height: "80%",
+                      fontSize: "0.6em",
+                      padding: "2px",
+                      cursor: module ? "grab" : "default",
+                    }}
+                  >
+                    {module ? module.name.split(" ")[0] : "Empty"}
+                  </div>
+                ))}
+              </div>
+
+              {hoveredItem === item.id && (
+                <>
+                  <button
+                    onClick={() => onRemoveGear(item.id)}
+                    className="absolute top-2 right-2 bg-transparent text-white hover:text-red-500 text-xl"
+                  >
+                    ✕
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedGear(item)
+                      setShowPositionModal(true)
+                    }}
+                    className="absolute top-2 left-2 bg-blue-600 text-white hover:bg-blue-700 text-xs px-2 py-1 rounded"
+                  >
+                    Move
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      return (
+        <div
+          key={item.id}
+          onMouseEnter={() => setHoveredItem(item.id)}
+          onMouseLeave={() => setHoveredItem(null)}
+          onMouseDown={(e) => onMouseDownItem(e, item.id)}
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: `${position}px`,
+            height: `${item.units * RACK_UNIT_HEIGHT}px`,
+            cursor: "grab",
+          }}
+        >
+          <div
+            style={{
+              paddingLeft: "20px",
+              paddingRight: "20px",
+              width: item.widthFraction ? `${getItemWidth(item)}px` : "100%",
+              height: "100%",
+              backgroundColor: item.color,
+              borderRadius: "8px",
+              border: "2px solid #444",
+              color: "white",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+              position: "relative",
+              left: item.widthFraction ? `${getItemLeft(item)}px` : "0",
+              marginLeft: item.widthFraction ? "20px" : "0",
+            }}
+          >
+            <div
+              style={{
+                fontSize: item.widthFraction ? "0.6em" : "0.8em",
+                textAlign: "center",
+                padding: "0 8px",
+                wordWrap: "break-word",
+                maxWidth: "100%",
+              }}
+            >
+              {item.name}
+            </div>
+
+            {hoveredItem === item.id && (
+              <>
+                <button
+                  onClick={() => onRemoveGear(item.id)}
+                  className="absolute top-2 right-2 bg-black bg-opacity-70 text-white hover:text-red-500 text-xl rounded-full w-6 h-6 flex items-center justify-center"
+                >
+                  ✕
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedGear(item)
+                    setShowPositionModal(true)
+                  }}
+                  className="absolute top-2 left-2 bg-blue-600 text-white hover:bg-blue-700 text-xs px-2 py-1 rounded"
+                >
+                  Move
+                </button>
+              </>
+            )}
+
+            {item.widthFraction && (
+              <div className="absolute bottom-1 left-1 flex gap-1">
+                <div className="bg-black bg-opacity-70 text-white text-xs px-1 rounded">
+                  {Math.round(item.widthFraction * 100)}%
+                </div>
+              </div>
             )}
           </div>
         </div>
+      )
+    }
 
-        {/* Rack Info */}
-        <div className="mt-4 text-center text-gray-400 text-sm">
-          <div>
-            {gear.length} items • {gear.reduce((sum, item) => sum + item.units, 0)}/{rackUnits}U used
+    const rackLayout = Array.from({ length: rackUnits }, (_, i) => ({
+      position: rackUnits - i,
+      y: i * RACK_UNIT_HEIGHT,
+    }))
+
+    return (
+      <>
+        <div className="flex-1">
+          <h2 className="text-xl font-semibold text-white mb-4 text-center">{label}</h2>
+          <div className="flex justify-center">
+            <div style={{ position: "relative" }}>
+              {/* Unit labels */}
+              <div
+                className="absolute text-right"
+                style={{
+                  left: "-60px",
+                  top: 0,
+                  height: RACK_UNIT_HEIGHT * rackUnits,
+                  width: "50px",
+                }}
+              >
+                {rackLayout.map((s) => (
+                  <div
+                    key={`left-${s.position}`}
+                    style={{
+                      height: RACK_UNIT_HEIGHT,
+                      lineHeight: `${RACK_UNIT_HEIGHT}px`,
+                    }}
+                    className="text-gray-400 font-mono text-sm font-bold flex items-center justify-end"
+                  >
+                    {s.position}U
+                  </div>
+                ))}
+              </div>
+
+              <div
+                className="absolute text-left"
+                style={{
+                  left: `${RACK_WIDTH + 20}px`,
+                  top: 0,
+                  height: RACK_UNIT_HEIGHT * rackUnits,
+                  width: "50px",
+                }}
+              >
+                {rackLayout.map((s) => (
+                  <div
+                    key={`right-${s.position}`}
+                    style={{
+                      height: RACK_UNIT_HEIGHT,
+                      lineHeight: `${RACK_UNIT_HEIGHT}px`,
+                    }}
+                    className="text-gray-400 font-mono text-sm font-bold flex items-center"
+                  >
+                    {s.position}U
+                  </div>
+                ))}
+              </div>
+
+              {/* Rack */}
+              <div
+                ref={ref}
+                style={{
+                  width: RACK_WIDTH,
+                  height: RACK_UNIT_HEIGHT * rackUnits,
+                  border: "4px solid #111",
+                  background: "#111",
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23333333'/%3E%3C/svg%3E")`,
+                  position: "relative",
+                }}
+                className="rounded-lg overflow-hidden"
+              >
+                {/* Horizontal lines */}
+                {Array.from({ length: rackUnits - 1 }).map((_, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      top: (i + 1) * RACK_UNIT_HEIGHT,
+                    }}
+                    className="absolute left-0 right-0 border-t border-gray-600"
+                  />
+                ))}
+
+                {/* Drop zone indicators */}
+                {draggedItem && draggedOverSlot && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: `${calculateGearPosition(draggedOverSlot, rackUnits)}px`,
+                      left: "20px",
+                      right: "20px",
+                      height: `${draggedItem.gear.units * RACK_UNIT_HEIGHT}px`,
+                      border: "2px dashed #3b82f6",
+                      borderRadius: "8px",
+                      backgroundColor: isPositionFree(draggedOverSlot, draggedItem.gear.units, draggedItem.gear.id)
+                        ? "rgba(59, 130, 246, 0.1)"
+                        : "rgba(239, 68, 68, 0.1)",
+                      pointerEvents: "none",
+                      zIndex: 1000,
+                    }}
+                  />
+                )}
+
+                {/* Gear items */}
+                {gear.map((g) => renderGearItem(g))}
+
+                {/* Empty state */}
+                {gear.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center text-gray-400">
+                    <div className="text-center">
+                      <div className="text-lg mb-2">Empty {label}</div>
+                      <div className="text-sm">Add gear from the sidebar</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Position Modal */}
-        <GearPositionModal
-          isOpen={positionModal.isOpen}
-          onClose={() => setPositionModal({ isOpen: false, gear: null })}
-          gear={positionModal.gear}
-          rackUnits={rackUnits}
-          currentPosition={positionModal.gear?.rackPosition || 1}
-          onMove={(newPosition) => handleMoveGearToPosition(positionModal.gear, newPosition)}
-          occupiedPositions={getOccupiedPositions()}
-        />
-      </div>
+        {showPositionModal && selectedGear && (
+          <GearPositionModal
+            gear={selectedGear}
+            rackUnits={rackUnits}
+            onMove={(newPosition) => {
+              onMoveGear(selectedGear.id, newPosition)
+              setShowPositionModal(false)
+              setSelectedGear(null)
+            }}
+            onClose={() => {
+              setShowPositionModal(false)
+              setSelectedGear(null)
+            }}
+            isPositionFree={isPositionFree}
+          />
+        )}
+      </>
     )
   },
 )
