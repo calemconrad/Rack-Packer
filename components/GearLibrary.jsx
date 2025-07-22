@@ -12,8 +12,7 @@ const GearLibrary = ({ onAddGear }) => {
         {gearList.map((gear) => (
           <div
             key={gear.id}
-            onClick={() => onAddGear(gear)}
-            className="flex items-center p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors"
+            className="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-blue-50 transition-colors"
           >
             <div className="w-16 h-16 mr-3 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
               {gear.image ? (
@@ -34,10 +33,26 @@ const GearLibrary = ({ onAddGear }) => {
                 </div>
               )}
             </div>
-            <div>
+            <div className="flex-1">
               <div className="font-medium">{gear.name}</div>
               <div className="text-sm text-gray-500">
                 {gear.units}U • {gear.category}
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => onAddGear(gear, "front")}
+                  className="px-2 py-1 bg-blue-500 text-white rounded text-xs"
+                  type="button"
+                >
+                  + Front
+                </button>
+                <button
+                  onClick={() => onAddGear(gear, "back")}
+                  className="px-2 py-1 bg-gray-700 text-white rounded text-xs"
+                  type="button"
+                >
+                  + Back
+                </button>
               </div>
             </div>
           </div>

@@ -1,22 +1,18 @@
 "use client"
 
 import { useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-
-interface GearWithPosition {
-  id: string
-  name: string
-  units: number
-  color: string
-  type: string
-  rackPosition: number
-  widthFraction?: number
-  slotPosition?: number
-}
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 interface GearPositionModalProps {
-  gear: GearWithPosition
+  gear: {
+    id: string
+    name: string
+    units: number
+    rackPosition: number
+  } | null
   rackUnits: number
   onMove: (newPosition: number) => void
   onClose: () => void
@@ -30,73 +26,62 @@ export default function GearPositionModal({
   onClose,
   isPositionFree,
 }: GearPositionModalProps) {
-  const [selectedPosition, setSelectedPosition] = useState(gear.rackPosition)
+  const [newPosition, setNewPosition] = useState(gear?.rackPosition || 1)
+
+  if (!gear) return null
 
   const handleMove = () => {
-    if (isPositionFree(selectedPosition, gear.units, gear.id)) {
-      onMove(selectedPosition)
+    if (isPositionFree(newPosition, gear.units, gear.id)) {
+      onMove(newPosition)
     }
   }
 
-  const positions = Array.from({ length: rackUnits - gear.units + 1 }, (_, i) => i + 1)
+  const isValidPosition = isPositionFree(newPosition, gear.units, gear.id)
+  const maxPosition = rackUnits - gear.units + 1
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <Card className="bg-gray-800 border-gray-700 w-96">
-        <CardHeader>
-          <CardTitle className="text-white">Move {gear.name}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="text-gray-300 text-sm">Select new position for this {gear.units}U item:</div>
-
-          <div className="grid grid-cols-4 gap-2 max-h-64 overflow-y-auto">
-            {positions.map((position) => {
-              const isFree = isPositionFree(position, gear.units, gear.id)
-              const isCurrent = position === gear.rackPosition
-
-              return (
-                <button
-                  key={position}
-                  onClick={() => setSelectedPosition(position)}
-                  disabled={!isFree && !isCurrent}
-                  className={`
-                    p-2 rounded text-sm font-medium transition-colors
-                    ${
-                      selectedPosition === position
-                        ? "bg-blue-600 text-white"
-                        : isFree || isCurrent
-                          ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
-                          : "bg-gray-800 text-gray-500 cursor-not-allowed"
-                    }
-                  `}
-                >
-                  {position}U{isCurrent && <div className="text-xs">Current</div>}
-                  {!isFree && !isCurrent && <div className="text-xs">Blocked</div>}
-                </button>
-              )
-            })}
+    <Dialog open={!!gear} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Move {gear.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="position">Rack Position (1U = bottom)</Label>
+            <Input
+              id="position"
+              type="number"
+              min={1}
+              max={maxPosition}
+              value={newPosition}
+              onChange={(e) => setNewPosition(Number.parseInt(e.target.value) || 1)}
+              className={!isValidPosition ? "border-red-500" : ""}
+            />
+            {!isValidPosition && (
+              <p className="text-sm text-red-500">
+                Position {newPosition} is not available for a {gear.units}U item
+              </p>
+            )}
           </div>
 
-          <div className="flex justify-between">
-            <Button
-              onClick={onClose}
-              variant="outline"
-              className="bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
-            >
+          <div className="text-sm text-gray-500">
+            <p>
+              Item: {gear.name} ({gear.units}U)
+            </p>
+            <p>Current position: {gear.rackPosition}U</p>
+            <p>Valid range: 1U - {maxPosition}U</p>
+          </div>
+
+          <div className="flex justify-end space-x-2">
+            <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button
-              onClick={handleMove}
-              disabled={
-                !isPositionFree(selectedPosition, gear.units, gear.id) && selectedPosition !== gear.rackPosition
-              }
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              Move to {selectedPosition}U
+            <Button onClick={handleMove} disabled={!isValidPosition}>
+              Move to {newPosition}U
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

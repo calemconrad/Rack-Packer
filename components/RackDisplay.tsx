@@ -42,6 +42,7 @@ interface RackDisplayProps {
   currentRackId: string | null
   draggedItem: any
   draggedOverSlot: number | null
+  setDraggedOverSlot: (slot: number | null) => void
   isPositionFree: (start: number, units: number, excludeId?: string) => boolean
 }
 
@@ -68,6 +69,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
       currentRackId,
       draggedItem,
       draggedOverSlot,
+      setDraggedOverSlot,
       isPositionFree,
     },
     ref,
@@ -75,8 +77,8 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
     const [showPositionModal, setShowPositionModal] = React.useState(false)
     const [selectedGear, setSelectedGear] = React.useState<GearWithPosition | null>(null)
 
-    const calculateGearPosition = (rackUnit: number, rackSize: number) => {
-      return (rackSize - rackUnit) * RACK_UNIT_HEIGHT
+    const calculateGearPosition = (rackUnit: number) => {
+      return (rackUnit - 1) * RACK_UNIT_HEIGHT
     }
 
     const getItemWidth = (item: GearWithPosition) => {
@@ -96,8 +98,48 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
       return 0
     }
 
+    // Updated drag handler using the corrected conversion utility
+    const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+      const rackContainer = e.currentTarget
+      const rect = rackContainer.getBoundingClientRect()
+      const mouseY = e.clientY - rect.top
+
+      // Direct calculation with unified system
+      const rawPosition = Math.floor(mouseY / RACK_UNIT_HEIGHT)
+      const rackPosition = rawPosition + 1 // Convert to 1-based index
+
+      // Clamp to valid units
+      const targetPosition = Math.max(1, Math.min(rackUnits, rackPosition))
+
+      // Debug logging
+      console.log(`Drag: mouseY=${mouseY}, ` + `rawPos=${rawPosition}, ` + `targetPos=${targetPosition}`)
+
+      setDraggedOverSlot(targetPosition)
+    }
+
+    const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+      // Only clear if we're leaving the rack container itself
+      if (e.currentTarget === e.target) {
+        setDraggedOverSlot(null)
+      }
+    }
+
+    const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault()
+
+      if (draggedItem && draggedOverSlot && onMoveGear) {
+        const isValid = isPositionFree(draggedOverSlot, draggedItem.gear.units, draggedItem.gear.id)
+        if (isValid) {
+          onMoveGear(draggedItem.gear.id, draggedOverSlot)
+        }
+      }
+
+      setDraggedOverSlot(null)
+    }
+
     const renderGearItem = (item: GearWithPosition) => {
-      const position = calculateGearPosition(item.rackPosition, rackUnits)
+      const position = calculateGearPosition(item.rackPosition)
 
       if (item.type === "chassis") {
         return (
@@ -178,23 +220,12 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
               </div>
 
               {hoveredItem === item.id && (
-                <>
-                  <button
-                    onClick={() => onRemoveGear(item.id)}
-                    className="absolute top-2 right-2 bg-transparent text-white hover:text-red-500 text-xl"
-                  >
-                    ✕
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedGear(item)
-                      setShowPositionModal(true)
-                    }}
-                    className="absolute top-2 left-2 bg-blue-600 text-white hover:bg-blue-700 text-xs px-2 py-1 rounded"
-                  >
-                    Move
-                  </button>
-                </>
+                <button
+                  onClick={() => onRemoveGear(item.id)}
+                  className="absolute top-2 right-2 bg-transparent text-white hover:text-red-500 text-xl"
+                >
+                  ✕
+                </button>
               )}
             </div>
           </div>
@@ -248,23 +279,12 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
             </div>
 
             {hoveredItem === item.id && (
-              <>
-                <button
-                  onClick={() => onRemoveGear(item.id)}
-                  className="absolute top-2 right-2 bg-black bg-opacity-70 text-white hover:text-red-500 text-xl rounded-full w-6 h-6 flex items-center justify-center"
-                >
-                  ✕
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedGear(item)
-                    setShowPositionModal(true)
-                  }}
-                  className="absolute top-2 left-2 bg-blue-600 text-white hover:bg-blue-700 text-xs px-2 py-1 rounded"
-                >
-                  Move
-                </button>
-              </>
+              <button
+                onClick={() => onRemoveGear(item.id)}
+                className="absolute top-2 right-2 bg-black bg-opacity-70 text-white hover:text-red-500 text-xl rounded-full w-6 h-6 flex items-center justify-center"
+              >
+                ✕
+              </button>
             )}
 
             {item.widthFraction && (
@@ -280,7 +300,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
     }
 
     const rackLayout = Array.from({ length: rackUnits }, (_, i) => ({
-      position: rackUnits - i,
+      position: i + 1, // 1-based index
       y: i * RACK_UNIT_HEIGHT,
     }))
 
@@ -340,6 +360,9 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
               {/* Rack */}
               <div
                 ref={ref}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 style={{
                   width: RACK_WIDTH,
                   height: RACK_UNIT_HEIGHT * rackUnits,
@@ -366,7 +389,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                   <div
                     style={{
                       position: "absolute",
-                      top: `${calculateGearPosition(draggedOverSlot, rackUnits)}px`,
+                      top: `${calculateGearPosition(draggedOverSlot)}px`,
                       left: "20px",
                       right: "20px",
                       height: `${draggedItem.gear.units * RACK_UNIT_HEIGHT}px`,

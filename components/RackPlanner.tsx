@@ -199,9 +199,8 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
      =  ADD / REMOVE  =
      ============================================== */
 
-  const addGear = (gear: any) => {
-    // Default to adding to front side
-    addGearToSide("front", gear)
+  const addGear = (gear: any, side: "front" | "back") => {
+    addGearToSide(side, gear)
   }
 
   const removeGearFromSide = (side: "front" | "back", gearId: string) => {
@@ -610,7 +609,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
 
     const customItem = customItemMap[itemName]
     if (customItem) {
-      addGear(customItem)
+      addGear(customItem, "front")
     }
   }
 
@@ -620,7 +619,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
       <div className="w-80 min-h-screen bg-gray-950">
         <RackSidebar
           onAddRack={handleAddRack}
-          onAddGear={addGear}
+          onAddGear={(gear) => addGear(gear, "front")}
           onAddCustomItem={handleAddCustomItem}
           onResetWorkspace={() => {
             setRacks([])
