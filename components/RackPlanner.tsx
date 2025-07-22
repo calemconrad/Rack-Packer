@@ -619,7 +619,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
       <div className="w-80 min-h-screen bg-gray-950">
         <RackSidebar
           onAddRack={handleAddRack}
-          onAddGear={(gear) => addGear(gear, "front")}
+          onAddGear={(gear, side) => addGear(gear, side || "front")}
           onAddCustomItem={handleAddCustomItem}
           onResetWorkspace={() => {
             setRacks([])
