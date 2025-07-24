@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import html2canvas from "html2canvas"
 import { jsPDF } from "jspdf"
+import gearList from "@/data/gearList"
 
 const popularRackGear = [
   // Adam Studio Monitor (rackmounted)
@@ -409,7 +410,7 @@ export default function RackSidebar({
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategory, setSelectedCategory] = useState("all")
 
-  const gearLibrary = popularRackGear
+  const gearLibrary = [...popularRackGear, ...gearList]
 
   // Group gear by category for better performance
   const gearByCategory = {}

@@ -81,22 +81,49 @@ const getAvailableSlots = (rackPosition: number, sideGear: GearWithPosition[], w
 }
 
 function findNextAvailablePosition(currentGear, units, rackUnits, widthFraction = 1) {
-  const slotsPerRow = Math.floor(1 / widthFraction)
   for (let rackPosition = 1; rackPosition <= rackUnits - units + 1; rackPosition++) {
-    for (let slotPosition = 0; slotPosition < slotsPerRow; slotPosition++) {
-      const conflict = currentGear.some(
-        (g) =>
-          // Check for vertical overlap and same slot occupancy
-          !(g.rackPosition + g.units - 1 < rackPosition || rackPosition + units - 1 < g.rackPosition) &&
-          g.widthFraction === widthFraction &&
-          g.slotPosition === slotPosition,
-      )
+    if (widthFraction === 1) {
+      // Full width item - check if any rack units are occupied
+      const conflict = currentGear.some((g) => {
+        const gEnd = g.rackPosition + g.units - 1
+        const nEnd = rackPosition + units - 1
+        return !(nEnd < g.rackPosition || rackPosition > gEnd)
+      })
       if (!conflict) {
-        return { rackPosition, slotPosition }
+        return { rackPosition, slotPosition: 0 }
+      }
+    } else {
+      // Fractional width item
+      const slotsPerRow = Math.floor(1 / widthFraction)
+      for (let slotPosition = 0; slotPosition < slotsPerRow; slotPosition++) {
+        const conflict = currentGear.some((g) => {
+          const gEnd = g.rackPosition + g.units - 1
+          const nEnd = rackPosition + units - 1
+
+          // Check for vertical overlap first
+          const verticalOverlap = !(nEnd < g.rackPosition || rackPosition > gEnd)
+          if (!verticalOverlap) return false
+
+          // If there's vertical overlap, check horizontal conflicts
+          if (g.widthFraction === 1) {
+            // Existing item is full width - conflicts with any fractional item
+            return true
+          } else if (g.widthFraction === widthFraction && g.slotPosition === slotPosition) {
+            // Same fraction and same slot - conflict
+            return true
+          }
+
+          return false
+        })
+
+        if (!conflict) {
+          return { rackPosition, slotPosition }
+        }
       }
     }
   }
-  // Default to first available if none found
+
+  // If no position found, return first position (this shouldn't happen with proper validation)
   return { rackPosition: 1, slotPosition: 0 }
 }
 
@@ -111,26 +138,29 @@ const canPlaceAtPosition = (
 ) => {
   if (rackPosition < 1 || rackPosition + units - 1 > rackUnits) return false
 
-  // Check for conflicts with existing gear
   const conflicts = sideGear.filter((g) => {
     if (excludeId && g.id === excludeId) return false
 
     const gEnd = g.rackPosition + g.units - 1
     const nEnd = rackPosition + units - 1
 
-    // Check if rack positions overlap
-    const positionsOverlap = !(nEnd < g.rackPosition || rackPosition > gEnd)
-    if (!positionsOverlap) return false
+    // Check if rack positions overlap vertically
+    const verticalOverlap = !(nEnd < g.rackPosition || rackPosition > gEnd)
+    if (!verticalOverlap) return false
 
-    // If positions overlap, check slot conflicts for fractional items
-    if (widthFraction && g.widthFraction === widthFraction) {
-      return g.slotPosition === slotPosition
+    // If positions overlap vertically, check horizontal conflicts
+    if (!widthFraction || widthFraction === 1) {
+      // New item is full width - conflicts with anything in same vertical space
+      return true
     }
 
-    // Full width items conflict with anything in the same position
-    if (!widthFraction || !g.widthFraction) return true
+    if (!g.widthFraction || g.widthFraction === 1) {
+      // Existing item is full width - conflicts with any fractional item
+      return true
+    }
 
-    return false
+    // Both are fractional - only conflict if same fraction and same slot
+    return g.widthFraction === widthFraction && g.slotPosition === slotPosition
   })
 
   return conflicts.length === 0
@@ -502,7 +532,11 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
       let targetSlotPosition = gear.slotPosition || 0
       if (gear.widthFraction) {
         const sideGear = draggedOverSide === "front" ? currentRack.frontGear : currentRack.backGear
-        const availableSlots = getAvailableSlots(draggedOverSlot, sideGear, gear.widthFraction)
+        const availableSlots = getAvailableSlots(
+          draggedOverSlot,
+          sideGear.filter((g) => g.id !== gear.id),
+          gear.widthFraction,
+        )
 
         if (availableSlots.length > 0) {
           // Find the closest available slot to the current position
@@ -689,8 +723,15 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
               {currentRack.units}U {currentRack.type === "fly" ? "Fly" : "Tour"} Rack
             </div>
             <div className="text-gray-300">
-              {rackItems.length} items • {rackItems.reduce((s, i) => s + i.units, 0)}/{currentRack.units}U used •{" "}
-              {totalLbs.toFixed(1)} lbs / {totalKg.toFixed(1)} kg
+              {rackItems.length} items • {(() => {
+                const occupiedPositions = new Set()
+                rackItems.forEach((item) => {
+                  for (let pos = item.rackPosition; pos < item.rackPosition + item.units; pos++) {
+                    occupiedPositions.add(pos)
+                  }
+                })
+                return occupiedPositions.size
+              })()}/{currentRack.units}U used • {totalLbs.toFixed(1)} lbs / {totalKg.toFixed(1)} kg
             </div>
 
             {warnings.length > 0 && (

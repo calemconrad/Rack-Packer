@@ -689,6 +689,20 @@ const gearList = [
     image: "/images/apollo-twin-x.jpg",
     manufacturer: "Universal Audio",
   },
+  {
+    id: "vented-1u-cantilever-shelf-6",
+    name: 'Vented Cantilever 1U Rack Shelf 6"',
+    type: "shelf",
+    category: "Utility",
+    units: 1,
+    image: "/images/vented-cantilever-shelf.jpg",
+    manufacturer: "Generic",
+    color: "#222222",
+    weight: 4,
+    depth: 6,
+    description: "Vented, cantilever, 1U, 6 inch, heavy-duty steel. 40 lbs weight capacity.",
+    link: "https://www.example.com/product-page-for-shelf",
+  },
 ]
 
 export default gearList
