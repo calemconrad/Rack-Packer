@@ -81,21 +81,15 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
       return (rackUnit - 1) * RACK_UNIT_HEIGHT
     }
 
+    // Updated width calculation for clean fractional spacing
     const getItemWidth = (item: GearWithPosition) => {
-      if (item.widthFraction) {
-        const fullWidth = 458
-        return fullWidth * item.widthFraction
-      }
-      return "100%"
+      const RACK_WIDTH = 482 // Use the actual rack container width
+      return RACK_WIDTH * (item.widthFraction || 1)
     }
 
+    // Updated left position calculation for clean alignment
     const getItemLeft = (item: GearWithPosition) => {
-      if (item.widthFraction && typeof item.slotPosition === "number") {
-        const fullWidth = 458
-        const slotWidth = fullWidth / Math.floor(1 / item.widthFraction)
-        return item.slotPosition * slotWidth
-      }
-      return 0
+      return (item.slotPosition || 0) * getItemWidth({ ...item, widthFraction: item.widthFraction })
     }
 
     // Updated drag handler using the corrected conversion utility
@@ -249,9 +243,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
         >
           <div
             style={{
-              paddingLeft: "20px",
-              paddingRight: "20px",
-              width: item.widthFraction ? `${getItemWidth(item)}px` : "100%",
+              width: `${getItemWidth(item)}px`,
               height: "100%",
               backgroundColor: item.color,
               borderRadius: "8px",
@@ -261,9 +253,11 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
               alignItems: "center",
               justifyContent: "center",
               boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-              position: "relative",
-              left: item.widthFraction ? `${getItemLeft(item)}px` : "0",
-              marginLeft: item.widthFraction ? "20px" : "0",
+              position: "absolute",
+              left: `${getItemLeft(item)}px`,
+              top: 0,
+              margin: 0,
+              padding: 0,
             }}
           >
             <div
@@ -285,14 +279,6 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
               >
                 ✕
               </button>
-            )}
-
-            {item.widthFraction && (
-              <div className="absolute bottom-1 left-1 flex gap-1">
-                <div className="bg-black bg-opacity-70 text-white text-xs px-1 rounded">
-                  {Math.round(item.widthFraction * 100)}%
-                </div>
-              </div>
             )}
           </div>
         </div>
@@ -371,7 +357,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                   backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23333333'/%3E%3C/svg%3E")`,
                   position: "relative",
                 }}
-                className="rounded-lg overflow-hidden"
+                className="rounded-lg"
               >
                 {/* Horizontal lines */}
                 {Array.from({ length: rackUnits - 1 }).map((_, i) => (
@@ -390,8 +376,8 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                     style={{
                       position: "absolute",
                       top: `${calculateGearPosition(draggedOverSlot)}px`,
-                      left: "20px",
-                      right: "20px",
+                      left: "0px",
+                      right: "0px",
                       height: `${draggedItem.gear.units * RACK_UNIT_HEIGHT}px`,
                       border: "2px dashed #3b82f6",
                       borderRadius: "8px",

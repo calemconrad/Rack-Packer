@@ -80,34 +80,24 @@ const getAvailableSlots = (rackPosition: number, sideGear: GearWithPosition[], w
   return availableSlots
 }
 
-const findNextAvailablePosition = (
-  sideGear: GearWithPosition[],
-  units: number,
-  rackUnits: number,
-  widthFraction?: number,
-) => {
-  for (let position = 1; position <= rackUnits - units + 1; position++) {
-    // Check if this rack position range is free for full-width items
-    const isPositionFree = sideGear.every((g) => {
-      const gEnd = g.rackPosition + g.units - 1
-      const nEnd = position + units - 1
-      return nEnd < g.rackPosition || position > gEnd
-    })
-
-    if (isPositionFree) {
-      if (widthFraction) {
-        // For fractional items, find available slot
-        const availableSlots = getAvailableSlots(position, sideGear, widthFraction)
-        if (availableSlots.length > 0) {
-          return { rackPosition: position, slotPosition: availableSlots[0] }
-        }
-      } else {
-        // Full width item
-        return { rackPosition: position, slotPosition: 0 }
+function findNextAvailablePosition(currentGear, units, rackUnits, widthFraction = 1) {
+  const slotsPerRow = Math.floor(1 / widthFraction)
+  for (let rackPosition = 1; rackPosition <= rackUnits - units + 1; rackPosition++) {
+    for (let slotPosition = 0; slotPosition < slotsPerRow; slotPosition++) {
+      const conflict = currentGear.some(
+        (g) =>
+          // Check for vertical overlap and same slot occupancy
+          !(g.rackPosition + g.units - 1 < rackPosition || rackPosition + units - 1 < g.rackPosition) &&
+          g.widthFraction === widthFraction &&
+          g.slotPosition === slotPosition,
+      )
+      if (!conflict) {
+        return { rackPosition, slotPosition }
       }
     }
   }
-  return { rackPosition: 1, slotPosition: 0 } // Fallback
+  // Default to first available if none found
+  return { rackPosition: 1, slotPosition: 0 }
 }
 
 const canPlaceAtPosition = (
@@ -199,8 +189,75 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
      =  ADD / REMOVE  =
      ============================================== */
 
+  function handleAddGear(gear, side = "front") {
+    if (!currentRack) return
+
+    // Handle 500-series modules
+    if (gear.type === "500-module") {
+      const targetGear = side === "front" ? currentRack.frontGear : currentRack.backGear
+      const chassis = targetGear.find((g) => g.type === "chassis" && findEmptySlotInChassis(g) !== -1)
+      if (chassis) {
+        addModuleToChassisInRack(chassis.id, gear, side)
+        return
+      }
+    }
+
+    const rackUnits = currentRack.units
+    const currentGear =
+      side === "front"
+        ? racks.find((r) => r.id === currentRackId)?.frontGear || []
+        : racks.find((r) => r.id === currentRackId)?.backGear || []
+
+    const widthFraction = gear.widthFraction || 1
+    const { rackPosition, slotPosition } = findNextAvailablePosition(currentGear, gear.units, rackUnits, widthFraction)
+
+    // Generate color for the gear
+    const palette = {
+      standard: ["#3b82f6", "#ef4444", "#10b981", "#8b5cf6"],
+      chassis: ["#374151", "#4b5563", "#6b7280"],
+      custom: ["#6b7280", "#374151"],
+    }
+    const color =
+      palette[gear.type as keyof typeof palette]?.[Math.floor(Math.random() * palette[gear.type].length)] || "#3b82f6"
+
+    const newItem = {
+      id: `${gear.type}-${Date.now()}`,
+      name: gear.name,
+      units: gear.units || 1,
+      color: gear.color || color,
+      type: gear.type,
+      category: gear.category,
+      image: gear.image,
+      rackPosition,
+      slotPosition,
+      widthFraction,
+    }
+
+    if (gear.type === "chassis") {
+      newItem.slots = gear.slots || 6
+      newItem.modules = Array(gear.slots || 6).fill(null)
+    }
+
+    // Insert into correct gear array
+    setRacks((prev) =>
+      prev.map((r) => {
+        if (r.id === currentRackId) {
+          const updatedRack = { ...r }
+          if (side === "front") {
+            updatedRack.frontGear = [...updatedRack.frontGear, newItem]
+          } else {
+            updatedRack.backGear = [...updatedRack.backGear, newItem]
+          }
+          updatedRack.gear = [...updatedRack.frontGear, ...updatedRack.backGear]
+          return updatedRack
+        }
+        return r
+      }),
+    )
+  }
+
   const addGear = (gear: any, side: "front" | "back") => {
-    addGearToSide(side, gear)
+    handleAddGear(gear, side)
   }
 
   const removeGearFromSide = (side: "front" | "back", gearId: string) => {
@@ -233,75 +290,6 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
     if (!currentRack) return false
     const sideGear = side === "front" ? currentRack.frontGear : currentRack.backGear
     return canPlaceAtPosition(start, units, sideGear, currentRack.units, widthFraction, slotPosition, excludeId)
-  }
-
-  const addGearToSide = (side: "front" | "back", gear: any) => {
-    if (!currentRack) return
-
-    // Handle 500-series modules
-    if (gear.type === "500-module") {
-      const targetGear = side === "front" ? currentRack.frontGear : currentRack.backGear
-      const chassis = targetGear.find((g) => g.type === "chassis" && findEmptySlotInChassis(g) !== -1)
-      if (chassis) {
-        addModuleToChassisInRack(chassis.id, gear, side)
-        return
-      }
-    }
-
-    // Normal gear placement logic with fractional width support
-    const palette = {
-      standard: ["#3b82f6", "#ef4444", "#10b981", "#8b5cf6"],
-      chassis: ["#374151", "#4b5563", "#6b7280"],
-      custom: ["#6b7280", "#374151"],
-    }
-    const color =
-      palette[gear.type as keyof typeof palette]?.[Math.floor(Math.random() * palette[gear.type].length)] || "#3b82f6"
-
-    const units = gear.units || 1
-    const sideGear = side === "front" ? currentRack.frontGear : currentRack.backGear
-
-    // Find next available position (with fractional width support)
-    const { rackPosition, slotPosition } = findNextAvailablePosition(
-      sideGear,
-      units,
-      currentRack.units,
-      gear.widthFraction,
-    )
-
-    const newItem: GearWithPosition = {
-      id: `${gear.type}-${Date.now()}`,
-      name: gear.name,
-      units,
-      color: gear.color || color,
-      type: gear.type,
-      category: gear.category,
-      image: gear.image,
-      rackPosition,
-      widthFraction: gear.widthFraction,
-      slotPosition: gear.widthFraction ? slotPosition : undefined,
-    }
-
-    if (gear.type === "chassis") {
-      newItem.slots = gear.slots || 6
-      newItem.modules = Array(gear.slots || 6).fill(null)
-    }
-
-    setRacks((prev) =>
-      prev.map((r) => {
-        if (r.id === currentRackId) {
-          const updatedRack = { ...r }
-          if (side === "front") {
-            updatedRack.frontGear = [...r.frontGear, newItem]
-          } else {
-            updatedRack.backGear = [...r.backGear, newItem]
-          }
-          // Also add to main gear array for backward compatibility
-          updatedRack.gear = [...updatedRack.frontGear, ...updatedRack.backGear]
-          return updatedRack
-        }
-        return r
-      }),
-    )
   }
 
   /* ================== MOVE GEAR TO POSITION ================== */
@@ -510,13 +498,18 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
     if (draggedItem && draggedOverSlot && draggedOverSide && currentRack) {
       const { gear } = draggedItem
 
-      // For fractional width items, try to maintain slot position or find new one
+      // For fractional width items, calculate available slots and find the best one
       let targetSlotPosition = gear.slotPosition || 0
       if (gear.widthFraction) {
         const sideGear = draggedOverSide === "front" ? currentRack.frontGear : currentRack.backGear
         const availableSlots = getAvailableSlots(draggedOverSlot, sideGear, gear.widthFraction)
+
         if (availableSlots.length > 0) {
-          targetSlotPosition = availableSlots.includes(targetSlotPosition) ? targetSlotPosition : availableSlots[0]
+          // Find the closest available slot to the current position
+          const currentSlot = gear.slotPosition || 0
+          targetSlotPosition = availableSlots.reduce((closest, slot) =>
+            Math.abs(slot - currentSlot) < Math.abs(closest - currentSlot) ? slot : closest,
+          )
         } else {
           // No available slots, cancel move
           setDraggedItem(null)

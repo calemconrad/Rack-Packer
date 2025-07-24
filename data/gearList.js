@@ -679,6 +679,16 @@ const gearList = [
     power: "25W",
     color: "#3a3a3a",
   },
+  {
+    id: "apollo-twin-x",
+    name: "Universal Audio Apollo Twin X",
+    type: "interface",
+    category: "Interface",
+    units: 2,
+    widthFraction: 1 / 3,
+    image: "/images/apollo-twin-x.jpg",
+    manufacturer: "Universal Audio",
+  },
 ]
 
 export default gearList

@@ -360,6 +360,18 @@ const popularRackGear = [
 
   // WesAudio NG Bus Compressor
   { name: "WesAudio NG Bus Compressor", units: 1, type: "Compressor", category: "Dynamics", color: "#2ECC40" },
+
+  // Universal Audio Apollo Twin X
+  {
+    name: "Universal Audio Apollo Twin X",
+    units: 2,
+    type: "Interface",
+    category: "Interface",
+    widthFraction: 1 / 3,
+    image: "/images/apollo-twin-x.jpg",
+    manufacturer: "Universal Audio",
+    color: "#0074D9",
+  },
 ]
 
 const rackTypes = [
