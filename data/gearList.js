@@ -703,6 +703,31 @@ const gearList = [
     description: "Vented, cantilever, 1U, 6 inch, heavy-duty steel. 40 lbs weight capacity.",
     link: "https://www.example.com/product-page-for-shelf",
   },
+  {
+    id: "rackmount-thunderbolt-hub",
+    name: "Rackmount Thunderbolt Hub",
+    type: "interface",
+    category: "Utility",
+    units: 1,
+    widthFraction: 1 / 3,
+    manufacturer: "Generic",
+    color: "#4a4a4a",
+    power: "15W",
+    description: "Compact rackmount Thunderbolt hub for connecting multiple devices",
+  },
+  {
+    id: "yamaha-rio3224-d3",
+    name: "Yamaha Rio3224-D3",
+    description: "32-input/24-output Dante Stage Box with 32-bit AD/DA, 8 AES Outs, and Redundant Power Supplies",
+    units: 4,
+    manufacturer: "Yamaha",
+    category: "Stage Rack",
+    power: "100W",
+    color: "#3a3a3a",
+    image:
+      "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Screen%20Shot%202025-07-24%20at%2012.59.07%20PM-bwabYGHZy337FNXS8AvnuHHlh1uAHY.png",
+    type: "stagebox",
+  },
 ]
 
 export default gearList

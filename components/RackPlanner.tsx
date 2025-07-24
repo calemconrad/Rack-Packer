@@ -182,6 +182,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
   } | null>(null)
   const [draggedOverSlot, setDraggedOverSlot] = useState<number | null>(null)
   const [draggedOverSide, setDraggedOverSide] = useState<"front" | "back" | null>(null)
+  const [draggedOverSlotPosition, setDraggedOverSlotPosition] = useState<number | null>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
 
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
@@ -471,12 +472,12 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
 
   const onMouseDownItem = (e: React.MouseEvent, id: string, side: "front" | "back") => {
     e.preventDefault()
+    e.stopPropagation()
     const sideGear = side === "front" ? currentRack?.frontGear : currentRack?.backGear
     const gear = sideGear?.find((g) => g.id === id)
     if (!gear) return
     setDraggedItem({ gear, fromSlot: gear.rackPosition, side })
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    setDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+    setDragOffset({ x: 0, y: 0 }) // Reset offset for more predictable dragging
   }
 
   const onGlobalMouseMove = (e: MouseEvent) => {
@@ -514,13 +515,26 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
 
     if (targetSide && targetRackRef?.current) {
       const rackRect = targetRackRef.current.getBoundingClientRect()
-      const y = e.clientY - rackRect.top - dragOffset.y
-      const targetRackUnit = Math.max(1, Math.min(currentRack.units, Math.floor(y / RACK_UNIT_HEIGHT) + 1))
+      const relativeY = e.clientY - rackRect.top
+      const relativeX = e.clientX - rackRect.left
+      const targetRackUnit = Math.max(1, Math.min(currentRack.units, Math.floor(relativeY / RACK_UNIT_HEIGHT) + 1))
+
       setDraggedOverSlot(targetRackUnit)
       setDraggedOverSide(targetSide)
+
+      // Calculate slot position for fractional width items
+      if (draggedItem.gear.widthFraction && draggedItem.gear.widthFraction < 1) {
+        const slotsPerUnit = Math.floor(1 / draggedItem.gear.widthFraction)
+        const slotWidth = RACK_WIDTH / slotsPerUnit
+        const targetSlotPosition = Math.max(0, Math.min(slotsPerUnit - 1, Math.floor(relativeX / slotWidth)))
+        setDraggedOverSlotPosition(targetSlotPosition)
+      } else {
+        setDraggedOverSlotPosition(0)
+      }
     } else {
       setDraggedOverSlot(null)
       setDraggedOverSide(null)
+      setDraggedOverSlotPosition(null)
     }
   }
 
@@ -528,9 +542,11 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
     if (draggedItem && draggedOverSlot && draggedOverSide && currentRack) {
       const { gear } = draggedItem
 
-      // For fractional width items, calculate available slots and find the best one
-      let targetSlotPosition = gear.slotPosition || 0
-      if (gear.widthFraction) {
+      // Use the calculated slot position from mouse movement
+      let targetSlotPosition = draggedOverSlotPosition ?? 0
+
+      // For fractional width items, validate the slot position
+      if (gear.widthFraction && gear.widthFraction < 1) {
         const sideGear = draggedOverSide === "front" ? currentRack.frontGear : currentRack.backGear
         const availableSlots = getAvailableSlots(
           draggedOverSlot,
@@ -538,29 +554,32 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
           gear.widthFraction,
         )
 
-        if (availableSlots.length > 0) {
-          // Find the closest available slot to the current position
-          const currentSlot = gear.slotPosition || 0
-          targetSlotPosition = availableSlots.reduce((closest, slot) =>
-            Math.abs(slot - currentSlot) < Math.abs(closest - currentSlot) ? slot : closest,
-          )
-        } else {
-          // No available slots, cancel move
-          setDraggedItem(null)
-          setDraggedOverSlot(null)
-          setDraggedOverSide(null)
-          return
+        if (!availableSlots.includes(targetSlotPosition)) {
+          // If target slot is not available, find the closest available slot
+          if (availableSlots.length > 0) {
+            targetSlotPosition = availableSlots.reduce((closest, slot) =>
+              Math.abs(slot - targetSlotPosition) < Math.abs(closest - targetSlotPosition) ? slot : closest,
+            )
+          } else {
+            // No available slots, cancel move
+            setDraggedItem(null)
+            setDraggedOverSlot(null)
+            setDraggedOverSide(null)
+            setDraggedOverSlotPosition(null)
+            return
+          }
         }
       }
 
       if (
-        isPositionFreeForSide(
+        canPlaceAtPosition(
           draggedOverSlot,
           gear.units,
-          draggedOverSide,
-          gear.id,
+          draggedOverSide === "front" ? currentRack.frontGear : currentRack.backGear,
+          currentRack.units,
           gear.widthFraction,
           targetSlotPosition,
+          gear.id,
         )
       ) {
         // Remove from original side
@@ -592,6 +611,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
     setDraggedItem(null)
     setDraggedOverSlot(null)
     setDraggedOverSide(null)
+    setDraggedOverSlotPosition(null)
     setDraggedModule(null)
     setDraggedModuleInfo(null)
   }
@@ -789,6 +809,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
               currentRackId={currentRackId}
               draggedItem={draggedOverSide === "front" ? draggedItem : null}
               draggedOverSlot={draggedOverSide === "front" ? draggedOverSlot : null}
+              setDraggedOverSlot={setDraggedOverSlot}
               isPositionFree={(start, units, excludeId) =>
                 isPositionFreeForSide(start, units, "front", excludeId, undefined, undefined)
               }
@@ -834,6 +855,7 @@ export default function RackPlanner({ initialProject, onProjectChange }: RackPla
               currentRackId={currentRackId}
               draggedItem={draggedOverSide === "back" ? draggedItem : null}
               draggedOverSlot={draggedOverSide === "back" ? draggedOverSlot : null}
+              setDraggedOverSlot={setDraggedOverSlot}
               isPositionFree={(start, units, excludeId) =>
                 isPositionFreeForSide(start, units, "back", excludeId, undefined, undefined)
               }

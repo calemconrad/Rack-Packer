@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import html2canvas from "html2canvas"
 import { jsPDF } from "jspdf"
 import gearList from "@/data/gearList"
+import { ChevronDown, ChevronRight } from "lucide-react"
 
 const popularRackGear = [
   // Adam Studio Monitor (rackmounted)
@@ -397,7 +398,7 @@ const rackTypes = [
     .filter((rack) => !["11U", "22U", "23U", "24U"].includes(rack.size)),
 ]
 
-export default function RackSidebar({
+const RackSidebar = ({
   onAddRack,
   onAddGear,
   onAddCustomItem,
@@ -405,47 +406,50 @@ export default function RackSidebar({
   rackItems,
   currentRack,
   exportTargetRef,
-}) {
+}) => {
   const [activeTab, setActiveTab] = useState("racks")
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedCategory, setSelectedCategory] = useState("All Categories")
+  const [expandedCategories, setExpandedCategories] = useState({})
 
   const gearLibrary = [...popularRackGear, ...gearList]
 
-  // Group gear by category for better performance
-  const gearByCategory = {}
-  gearLibrary.forEach((gear) => {
-    if (!gearByCategory[gear.category]) {
-      gearByCategory[gear.category] = []
-    }
-    gearByCategory[gear.category].push(gear)
-  })
+  // Get unique categories from gear list
+  const categories = useMemo(() => {
+    const cats = [...new Set(gearLibrary.map((gear) => gear.category))]
+    return ["All Categories", ...cats.sort()]
+  }, [])
 
-  const categoryList = Object.keys(gearByCategory)
+  // Filter gear based on search and category
+  const filteredGear = useMemo(() => {
+    return gearLibrary.filter((gear) => {
+      const matchesSearch =
+        gear.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        gear.manufacturer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        gear.category.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesCategory = selectedCategory === "All Categories" || gear.category === selectedCategory
+      return matchesSearch && matchesCategory
+    })
+  }, [searchTerm, selectedCategory])
 
-  const [collapsedCategories, setCollapsedCategories] = useState(() =>
-    categoryList.reduce((acc, category) => {
-      acc[category] = true // true = collapsed
-      return acc
-    }, {}),
-  )
+  // Group gear by category
+  const groupedGear = useMemo(() => {
+    const groups = {}
+    filteredGear.forEach((gear) => {
+      if (!groups[gear.category]) {
+        groups[gear.category] = []
+      }
+      groups[gear.category].push(gear)
+    })
+    return groups
+  }, [filteredGear])
 
   const toggleCategory = (category) => {
-    setCollapsedCategories((prev) => ({
+    setExpandedCategories((prev) => ({
       ...prev,
       [category]: !prev[category],
     }))
   }
-
-  // Filter gear by search term and category
-  const filteredGear = gearLibrary.filter((gear) => {
-    const matchesSearch = gear.name.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesCategory = selectedCategory === "all" || gear.category.toLowerCase() === selectedCategory.toLowerCase()
-    return matchesSearch && matchesCategory
-  })
-
-  // Get unique categories for filter
-  const categories = ["all", ...Object.keys(gearByCategory)]
 
   // PDF Export function
   const exportPDF = async () => {
@@ -650,7 +654,7 @@ export default function RackSidebar({
                 >
                   {categories.map((category) => (
                     <option key={category} value={category}>
-                      {category === "all" ? "All Categories" : category}
+                      {category}
                     </option>
                   ))}
                 </select>
@@ -659,106 +663,62 @@ export default function RackSidebar({
 
             {/* Grouped Gear by Category */}
             <div className="space-y-3">
-              {selectedCategory === "all" ? (
-                // Group by categories when "all" is selected
-                Object.entries(gearByCategory).map(([category, gears]) => {
-                  // Apply search filter to category gear
-                  const filteredCategoryGear = gears.filter((gear) =>
-                    gear.name.toLowerCase().includes(searchTerm.toLowerCase()),
-                  )
+              {Object.entries(groupedGear).map(([category, gearItems]) => (
+                <div key={category} className="space-y-2 mb-4">
+                  <button
+                    onClick={() => toggleCategory(category)}
+                    className="w-full flex items-center justify-between py-2 px-2 text-left font-medium text-gray-300 hover:bg-gray-800 rounded"
+                  >
+                    <span>{category}</span>
+                    <span>
+                      {expandedCategories[category] ? (
+                        <ChevronDown className="w-4 h-4" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4" />
+                      )}
+                    </span>
+                  </button>
 
-                  if (filteredCategoryGear.length === 0) return null
-
-                  return (
-                    <div key={category} className="space-y-2 mb-4">
-                      <button
-                        onClick={() => toggleCategory(category)}
-                        className="w-full flex items-center justify-between py-2 px-2 text-left font-medium text-gray-300 hover:bg-gray-800 rounded"
-                      >
-                        <span>{category}</span>
-                        <span>{collapsedCategories[category] ? "▼" : "►"}</span>
-                      </button>
-
-                      {!collapsedCategories[category] && (
-                        <div className="space-y-1">
-                          {filteredCategoryGear.map((gear, index) => (
-                            <div key={index} className="space-y-1">
-                              <Button
-                                onClick={() => onAddGear(gear, "front")}
-                                variant="outline"
-                                className="w-full justify-start text-left bg-gray-800 border-gray-700 hover:bg-gray-700 text-white whitespace-normal break-words py-4 px-4 min-h-[64px]"
-                              >
-                                <div>
-                                  <div className="font-medium">{gear.name}</div>
-                                  <div className="text-xs text-gray-400">
-                                    {gear.units}U • {gear.category}
-                                  </div>
-                                </div>
-                              </Button>
-                              <div className="flex gap-1 ml-4">
-                                <Button
-                                  onClick={() => onAddGear(gear, "front")}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
-                                >
-                                  + Front
-                                </Button>
-                                <Button
-                                  onClick={() => onAddGear(gear, "back")}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
-                                >
-                                  + Back
-                                </Button>
+                  {expandedCategories[category] && (
+                    <div className="space-y-1">
+                      {gearItems.map((gear, index) => (
+                        <div key={index} className="space-y-1">
+                          <Button
+                            onClick={() => onAddGear(gear, "front")}
+                            variant="outline"
+                            className="w-full justify-start text-left bg-gray-800 border-gray-700 hover:bg-gray-700 text-white whitespace-normal break-words py-4 px-4 min-h-[64px]"
+                          >
+                            <div>
+                              <div className="font-medium">{gear.name}</div>
+                              <div className="text-xs text-gray-400">
+                                {gear.units}U • {gear.category}
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
-              ) : (
-                // Show filtered gear when specific category is selected
-                <div className="space-y-2">
-                  {filteredGear.map((gear, index) => (
-                    <div key={index} className="space-y-1">
-                      <Button
-                        onClick={() => onAddGear(gear, "front")}
-                        variant="outline"
-                        className="w-full justify-start text-left bg-gray-800 border-gray-700 hover:bg-gray-700 text-white whitespace-normal break-words py-4 px-4 min-h-[64px]"
-                      >
-                        <div>
-                          <div className="font-medium">{gear.name}</div>
-                          <div className="text-xs text-gray-400">
-                            {gear.units}U • {gear.category}
+                          </Button>
+                          <div className="flex gap-1 ml-4">
+                            <Button
+                              onClick={() => onAddGear(gear, "front")}
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
+                            >
+                              + Front
+                            </Button>
+                            <Button
+                              onClick={() => onAddGear(gear, "back")}
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
+                            >
+                              + Back
+                            </Button>
                           </div>
                         </div>
-                      </Button>
-                      <div className="flex gap-1 ml-4">
-                        <Button
-                          onClick={() => onAddGear(gear, "front")}
-                          size="sm"
-                          variant="ghost"
-                          className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
-                        >
-                          + Front
-                        </Button>
-                        <Button
-                          onClick={() => onAddGear(gear, "back")}
-                          size="sm"
-                          variant="ghost"
-                          className="text-xs text-gray-400 hover:bg-gray-200 hover:text-black"
-                        >
-                          + Back
-                        </Button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+              ))}
             </div>
 
             {filteredGear.length === 0 && (
@@ -800,3 +760,5 @@ export default function RackSidebar({
     </div>
   )
 }
+
+export default RackSidebar

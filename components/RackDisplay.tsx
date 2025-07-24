@@ -4,7 +4,7 @@ import React, { forwardRef } from "react"
 import GearPositionModal from "./GearPositionModal"
 
 const RACK_UNIT_HEIGHT = 44
-const RACK_WIDTH = 482
+const RACK_WIDTH = 458
 
 interface GearWithPosition {
   id: string
@@ -81,15 +81,18 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
       return (rackUnit - 1) * RACK_UNIT_HEIGHT
     }
 
-    // Updated width calculation for clean fractional spacing
     const getItemWidth = (item: GearWithPosition) => {
-      const RACK_WIDTH = 482 // Use the actual rack container width
-      return RACK_WIDTH * (item.widthFraction || 1)
+      if (!item.widthFraction || item.widthFraction === 1) {
+        return RACK_WIDTH
+      }
+      return RACK_WIDTH * item.widthFraction
     }
 
-    // Updated left position calculation for clean alignment
     const getItemLeft = (item: GearWithPosition) => {
-      return (item.slotPosition || 0) * getItemWidth({ ...item, widthFraction: item.widthFraction })
+      if (!item.widthFraction || item.widthFraction === 1) {
+        return 0
+      }
+      return (item.slotPosition || 0) * (RACK_WIDTH * item.widthFraction)
     }
 
     // Updated drag handler using the corrected conversion utility
@@ -105,9 +108,6 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
 
       // Clamp to valid units
       const targetPosition = Math.max(1, Math.min(rackUnits, rackPosition))
-
-      // Debug logging
-      console.log(`Drag: mouseY=${mouseY}, ` + `rawPos=${rawPosition}, ` + `targetPos=${targetPosition}`)
 
       setDraggedOverSlot(targetPosition)
     }
@@ -144,84 +144,81 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
             onMouseDown={(e) => onMouseDownItem(e, item.id)}
             style={{
               position: "absolute",
-              top: `${position}px`,
-              left: 0,
-              right: 0,
+              left: item.widthFraction ? `${getItemLeft(item)}px` : "0",
+              width: item.widthFraction ? `${getItemWidth(item)}px` : "458px",
+              top: `${(item.rackPosition - 1) * RACK_UNIT_HEIGHT}px`,
               height: `${item.units * RACK_UNIT_HEIGHT}px`,
+              backgroundColor: item.color,
+              borderRadius: "8px",
+              border: "2px solid #444",
+              color: "white",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
               cursor: "grab",
+              paddingLeft: "20px",
+              paddingRight: "20px",
             }}
           >
             <div
               style={{
-                paddingLeft: "20px",
-                paddingRight: "20px",
-                width: "100%",
-                height: "100%",
-                border: "2px solid #444",
-                background: "#1a1a1a",
-                display: "flex",
-                flexDirection: "column",
-                borderRadius: "8px",
-                boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+                color: "white",
+                fontWeight: "bold",
+                padding: "8px 0",
+                textAlign: "center",
+                fontSize: "0.9em",
               }}
             >
-              <div
-                style={{
-                  color: "white",
-                  fontWeight: "bold",
-                  padding: "8px 0",
-                  textAlign: "center",
-                  fontSize: "0.9em",
-                }}
-              >
-                {item.name}
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  flex: 1,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "8px",
-                  gap: "2px",
-                  minHeight: "60px",
-                }}
-              >
-                {item.modules?.map((module, idx) => (
-                  <div
-                    key={idx}
-                    onMouseDown={(e) => handleModuleMouseDown(e, item.id, idx)}
-                    onMouseUp={(e) => handleModuleMouseUp(e, item.id, idx)}
-                    style={{
-                      flex: 1,
-                      background: module ? "#7c3aed" : "#2d2d2d",
-                      border: "1px solid #666",
-                      borderRadius: "3px",
-                      color: "white",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      height: "80%",
-                      fontSize: "0.6em",
-                      padding: "2px",
-                      cursor: module ? "grab" : "default",
-                    }}
-                  >
-                    {module ? module.name.split(" ")[0] : "Empty"}
-                  </div>
-                ))}
-              </div>
-
-              {hoveredItem === item.id && (
-                <button
-                  onClick={() => onRemoveGear(item.id)}
-                  className="absolute top-2 right-2 bg-transparent text-white hover:text-red-500 text-xl"
-                >
-                  ✕
-                </button>
-              )}
+              {item.name}
             </div>
+
+            <div
+              style={{
+                display: "flex",
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+                padding: "8px",
+                gap: "2px",
+                minHeight: "60px",
+                width: "100%",
+              }}
+            >
+              {item.modules?.map((module, idx) => (
+                <div
+                  key={idx}
+                  onMouseDown={(e) => handleModuleMouseDown(e, item.id, idx)}
+                  onMouseUp={(e) => handleModuleMouseUp(e, item.id, idx)}
+                  style={{
+                    flex: 1,
+                    background: module ? "#7c3aed" : "#2d2d2d",
+                    border: "1px solid #666",
+                    borderRadius: "3px",
+                    color: "white",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: "80%",
+                    fontSize: "0.6em",
+                    padding: "2px",
+                    cursor: module ? "grab" : "default",
+                  }}
+                >
+                  {module ? module.name.split(" ")[0] : "Empty"}
+                </div>
+              ))}
+            </div>
+
+            {hoveredItem === item.id && (
+              <button
+                onClick={() => onRemoveGear(item.id)}
+                className="absolute top-2 right-2 bg-transparent text-white hover:text-red-500 text-xl"
+              >
+                ✕
+              </button>
+            )}
           </div>
         )
       }
@@ -234,16 +231,16 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
           onMouseDown={(e) => onMouseDownItem(e, item.id)}
           style={{
             position: "absolute",
-            left: 0,
-            right: 0,
-            top: `${position}px`,
+            left: item.widthFraction ? `${getItemLeft(item)}px` : "0",
+            width: item.widthFraction ? `${getItemWidth(item)}px` : "458px",
+            top: `${(item.rackPosition - 1) * RACK_UNIT_HEIGHT}px`,
             height: `${item.units * RACK_UNIT_HEIGHT}px`,
             cursor: "grab",
           }}
         >
           <div
             style={{
-              width: `${getItemWidth(item)}px`,
+              width: "100%",
               height: "100%",
               backgroundColor: item.color,
               borderRadius: "8px",
@@ -253,16 +250,12 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
               alignItems: "center",
               justifyContent: "center",
               boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
-              position: "absolute",
-              left: `${getItemLeft(item)}px`,
-              top: 0,
-              margin: 0,
-              padding: 0,
+              position: "relative",
             }}
           >
             <div
               style={{
-                fontSize: item.widthFraction ? "0.6em" : "0.8em",
+                fontSize: item.widthFraction && item.widthFraction < 1 ? "0.6em" : "0.8em",
                 textAlign: "center",
                 padding: "0 8px",
                 wordWrap: "break-word",
@@ -292,74 +285,55 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
 
     return (
       <>
+        {/* PARENT WRAPPER 1: Main component wrapper */}
         <div className="flex-1">
           <h2 className="text-xl font-semibold text-white mb-4 text-center">{label}</h2>
-          <div className="flex justify-center">
-            <div style={{ position: "relative" }}>
-              {/* Unit labels */}
-              <div
-                className="absolute text-right"
-                style={{
-                  left: "-60px",
-                  top: 0,
-                  height: RACK_UNIT_HEIGHT * rackUnits,
-                  width: "50px",
-                }}
-              >
-                {rackLayout.map((s) => (
-                  <div
-                    key={`left-${s.position}`}
-                    style={{
-                      height: RACK_UNIT_HEIGHT,
-                      lineHeight: `${RACK_UNIT_HEIGHT}px`,
-                    }}
-                    className="text-gray-400 font-mono text-sm font-bold flex items-center justify-end"
-                  >
-                    {s.position}U
-                  </div>
-                ))}
+
+          {/* PARENT WRAPPER 2: Center the whole rack assembly */}
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            {/* Left labels */}
+            <div style={{ width: 36, marginRight: 12, textAlign: "right" }}>
+              {rackLayout.map((s) => (
+                <div
+                  key={`left-${s.position}`}
+                  style={{
+                    height: RACK_UNIT_HEIGHT,
+                    lineHeight: `${RACK_UNIT_HEIGHT}px`,
+                  }}
+                  className="text-gray-400 font-mono text-sm font-bold flex items-center justify-end"
+                >
+                  {s.position}U
+                </div>
+              ))}
+            </div>
+
+            {/* Rack section wrapper */}
+            <div>
+              {/* Optional: Vertical tick labels ABOVE */}
+              <div style={{ width: "max-content", margin: "0 auto", paddingBottom: 8 }}>
+                {/* Render tick labels vertically, stacked as needed */}
               </div>
 
-              <div
-                className="absolute text-left"
-                style={{
-                  left: `${RACK_WIDTH + 20}px`,
-                  top: 0,
-                  height: RACK_UNIT_HEIGHT * rackUnits,
-                  width: "50px",
-                }}
-              >
-                {rackLayout.map((s) => (
-                  <div
-                    key={`right-${s.position}`}
-                    style={{
-                      height: RACK_UNIT_HEIGHT,
-                      lineHeight: `${RACK_UNIT_HEIGHT}px`,
-                    }}
-                    className="text-gray-400 font-mono text-sm font-bold flex items-center"
-                  >
-                    {s.position}U
-                  </div>
-                ))}
-              </div>
-
-              {/* Rack */}
+              {/* Rack container: only this sets the boundaries for gear */}
               <div
                 ref={ref}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 style={{
-                  width: RACK_WIDTH,
-                  height: RACK_UNIT_HEIGHT * rackUnits,
-                  border: "4px solid #111",
+                  width: "458px", // Fixed width matches internal grid
+                  height: `${RACK_UNIT_HEIGHT * rackUnits}px`,
+                  position: "relative", // For absolute gear children
+                  margin: "0 auto", // Centered horizontally
                   background: "#111",
+                  border: "4px solid #111",
+                  borderRadius: 12,
+                  overflow: "hidden", // Ensures no gear can overflow the rack box
+                  padding: 0,
                   backgroundImage: `url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='1' fill='%23333333'/%3E%3C/svg%3E")`,
-                  position: "relative",
                 }}
-                className="rounded-lg"
               >
-                {/* Horizontal lines */}
+                {/* Horizontal lines between rack units */}
                 {Array.from({ length: rackUnits - 1 }).map((_, i) => (
                   <div
                     key={i}
@@ -370,7 +344,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                   />
                 ))}
 
-                {/* Drop zone indicators */}
+                {/* Drop zone indicators during drag */}
                 {draggedItem && draggedOverSlot && (
                   <div
                     style={{
@@ -390,7 +364,7 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                   />
                 )}
 
-                {/* Gear items */}
+                {/* Render all gear items here; absolutely position inside this box */}
                 {gear.map((g) => renderGearItem(g))}
 
                 {/* Empty state */}
@@ -403,6 +377,27 @@ const RackDisplay = forwardRef<HTMLDivElement, RackDisplayProps>(
                   </div>
                 )}
               </div>
+
+              {/* Optional: Vertical tick labels BELOW */}
+              <div style={{ width: "max-content", margin: "0 auto", paddingTop: 8 }}>
+                {/* Render tick labels vertically, stacked as needed */}
+              </div>
+            </div>
+
+            {/* Right labels */}
+            <div style={{ width: 36, marginLeft: 12, textAlign: "left" }}>
+              {rackLayout.map((s) => (
+                <div
+                  key={`right-${s.position}`}
+                  style={{
+                    height: RACK_UNIT_HEIGHT,
+                    lineHeight: `${RACK_UNIT_HEIGHT}px`,
+                  }}
+                  className="text-gray-400 font-mono text-sm font-bold flex items-center"
+                >
+                  {s.position}U
+                </div>
+              ))}
             </div>
           </div>
         </div>
